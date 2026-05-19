@@ -1,6 +1,6 @@
-name: 'AI Workspace'
+name: 'ai-workspace-dev'
 services:
-  api:
+  backend:
     container_name: backend_dev
     build:
       context: .

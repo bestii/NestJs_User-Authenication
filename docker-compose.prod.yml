@@ -1,8 +1,7 @@
-version: '3.8'
-name: 'nestjs-user-auth-prod'
+name: 'ai-workspace'
 services:
   api:
-    container_name: nestjs_api_prod
+    container_name: backend_prod
     build:
       context: .
       dockerfile: Dockerfile.prod
@@ -14,14 +13,12 @@ services:
       - postgres
 
   postgres:
-    container_name: postgres_db_prod
-    image: postgres:13
+    container_name: database_prod
+    image: postgres:16
     ports:
       - "${POSTGRES_PORT}:5432"
-    environment:
-      - POSTGRES_DB=${POSTGRES_DB}
-      - POSTGRES_USER=${POSTGRES_USER}
-      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+    env_file:
+      - .env
     volumes:
       - postgres_data:/var/lib/postgresql/data
 
