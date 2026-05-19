@@ -1,0 +1,14 @@
+{
+  "editor.codeActionsOnSave": {
+    "source.addMissingImports": "explicit",
+    "source.organizeImports": "explicit",
+    "editor.formatOnSave": "explicit"
+  },
+  "prettier.configPath": "../.prettierrc", // Path to Prettier configuration
+  "docwriter.style": "JSDoc",
+  "github.copilot.chat.commitMessageGeneration.instructions": [
+    {
+      "text": "Use the Conventional Commit message format (https://www.conventionalcommits.org/en/v1.0.0/)."
+    }
+  ]
+}
