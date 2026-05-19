@@ -3,3 +3,5 @@ allowBuilds:
   '@scarf/scarf': true
   '@nestjs/passport': true
   'unrs-resolver': true
+  '@prisma/engines': true
+  prisma: true
