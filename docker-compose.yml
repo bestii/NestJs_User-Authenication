@@ -1,6 +1,8 @@
 version: '3.8'
+name: 'AI Workspace'
 services:
   api:
+    container_name: backend_dev
     build:
       context: .
       dockerfile: Dockerfile.dev
@@ -16,7 +18,8 @@ services:
       - .env
 
   postgres:
-    image: postgres:13
+    container_name: database_dev
+    image: postgres:latest
     ports:
       - "${POSTGRES_PORT}:5432"
     environment:
