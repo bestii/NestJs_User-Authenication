@@ -1,0 +1,23 @@
+# Use an official Node.js runtime as a parent image
+FROM node:22-alpine
+
+# Set the working directory
+WORKDIR /usr/src/app
+
+# Install pnpm
+RUN npm install -g pnpm
+
+# Copy the package.json and pnpm-lock.yaml
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
+
+# Install app dependencies
+RUN pnpm install
+
+# Copy the rest of the application source code
+COPY . .
+
+# Expose the port the app runs on
+EXPOSE 3000
+
+# Start the app in development mode
+CMD ["pnpm", "run", "start:dev"]

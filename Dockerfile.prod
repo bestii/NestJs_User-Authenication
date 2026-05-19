@@ -1,0 +1,44 @@
+# Use an official Node.js runtime as a parent image
+FROM node:18-alpine AS builder
+
+# Set the working directory
+WORKDIR /usr/src/app
+
+# Install pnpm
+RUN npm install -g pnpm
+
+# Copy the package.json and pnpm-lock.yaml
+COPY package.json pnpm-lock.yaml ./
+
+# Install app dependencies
+RUN pnpm install
+
+# Copy the rest of the application source code
+COPY . .
+
+# Build the application
+RUN pnpm run build
+
+# Use a smaller, more secure base image for production
+FROM node:18-alpine
+
+ARG NODE_ENV=production
+ENV NODE_ENV=${NODE_ENV}
+
+WORKDIR /usr/src/app
+
+RUN npm install -g pnpm
+
+COPY package.json pnpm-lock.yaml ./
+
+# Install only production dependencies
+RUN pnpm install --prod
+
+# Copy the built application from the builder stage
+COPY --from=builder /usr/src/app/dist ./dist
+
+# Expose the port the app runs on
+EXPOSE 3000
+
+# Define the command to run the application
+CMD ["node", "dist/main"]
