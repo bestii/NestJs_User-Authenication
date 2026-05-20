@@ -9,6 +9,7 @@ import databaseConfig from './config/database.config';
 import { validateEnv } from './config/validate-env';
 import { HealthModule } from './health/health.module';
 import { UsersModule } from './users/users.module';
+import { PrismaModule } from './prisma/prisma.module';
 
 @Module({
   imports: [
@@ -23,6 +24,7 @@ import { UsersModule } from './users/users.module';
     UsersModule,
     AuthModule,
     HealthModule,
+    PrismaModule,
   ],
   controllers: [AppController],
   providers: [AppService],
