@@ -17,3 +17,5 @@ export class LoginDto {
   @IsNotEmpty()
   password!: string;
 }
+
+export type SignInUser = { id: string; username: string };

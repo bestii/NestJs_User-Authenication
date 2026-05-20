@@ -4,4 +4,5 @@ allowBuilds:
   '@nestjs/passport': true
   'unrs-resolver': true
   '@prisma/engines': true
-  prisma: true
+  "prisma": true
+  "bcrypt": true

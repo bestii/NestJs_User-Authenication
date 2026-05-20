@@ -21,7 +21,7 @@ export class AuthController {
   @Post('login')
   @ApiBody({ type: LoginDto })
   @UseGuards(PassportLocalGuard)
-  login(@Request() request: { user: { id: number; username: string } }) {
+  login(@Request() request: { user: { id: string; username: string } }) {
     return this.authService.signIn(request.user);
   }
 

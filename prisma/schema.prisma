@@ -6,6 +6,7 @@
 generator client {
   provider = "prisma-client"
   output   = "../src/generated/prisma"
+  moduleFormat    = "cjs"
 }
 
 datasource db {
@@ -13,8 +14,8 @@ datasource db {
 }
 
 model User {
-  id    Int     @id @default(autoincrement())
-  name String?
+  id    String     @id @default(uuid())
+  name String
   username String  @unique
   password String
 }

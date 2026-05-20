@@ -1,12 +1,9 @@
 import { Injectable, UnauthorizedException } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
+import * as bcrypt from 'bcrypt';
 import { UsersService } from 'src/users/users.service';
-import { LoginDto } from './auth.dto';
+import { LoginDto, type SignInUser } from './auth.dto';
 
-type SignInUser = {
-  id: number;
-  username: string;
-};
 type AuthenticatedUser = SignInUser & {
   access_token: string;
   token_type: 'bearer';
@@ -19,12 +16,13 @@ export class AuthService {
     private jwtService: JwtService,
   ) {}
 
-  validateUser(input: LoginDto): SignInUser | null {
-    const user = this.userService.findUserByUsername(input.username);
+  async validateUser(input: LoginDto) {
+    const user = await this.userService.findUserByUsername(input.username);
     if (!user) {
       return null;
     }
-    if (user.password === input.password) {
+    const isMatch = await bcrypt.compare(input.password, user.password);
+    if (isMatch) {
       return { id: user.id, username: user.username };
     }
     return null;
@@ -36,8 +34,8 @@ export class AuthService {
     return { ...user, access_token: accessToken, token_type: 'bearer' };
   }
 
-  authenticateUser(input: LoginDto): AuthenticatedUser | null {
-    const user = this.validateUser(input);
+  async authenticateUser(input: LoginDto): Promise<AuthenticatedUser | null> {
+    const user = await this.validateUser(input);
     if (!user) {
       throw new UnauthorizedException('Invalid username or password');
     }

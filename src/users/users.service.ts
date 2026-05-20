@@ -1,33 +1,31 @@
 import { Injectable } from '@nestjs/common';
-
-export type User = {
-  id: number;
-  username: string;
-  password: string;
-};
-
-// FIXME: For demo purposes, we're using a hardcoded list of users. In a real application, you would likely fetch this data from a database.
-const users: User[] = [
-  {
-    id: 1,
-    username: 'john',
-    password: 'changeme',
-  },
-  {
-    id: 2,
-    username: 'maria',
-    password: 'guess',
-  },
-  {
-    id: 3,
-    username: 'alice',
-    password: 'secret',
-  },
-];
+import * as bcrypt from 'bcrypt';
+import { PrismaService } from 'src/prisma/prisma.service';
+import { type CreateUserDto } from './users.dto';
 
 @Injectable()
 export class UsersService {
-  findUserByUsername(username: string): User | undefined {
-    return users.find((user) => user.username === username);
+  constructor(private prisma: PrismaService) {}
+  async createUser(user: CreateUserDto) {
+    const hashedPassword = await bcrypt.hash(user.password, 10);
+    const data = {
+      ...user,
+      password: hashedPassword,
+    };
+    const createdUser = await this.prisma.user.create({ data });
+    const { id, username, name } = createdUser;
+    return {
+      id,
+      name,
+      username,
+    };
+  }
+
+  findUserByUsername(username: string) {
+    return this.prisma.user.findUnique({
+      where: {
+        username,
+      },
+    });
   }
 }
