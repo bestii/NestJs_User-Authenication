@@ -4,7 +4,7 @@ import { IsNotEmpty, IsString } from 'class-validator';
 import { AppService } from './app.service';
 import { PassportJwtAuthGuard } from './auth/guards/passport-jwt.guard';
 
-export class TestDto {
+export class AwesomenessDto {
   @ApiProperty({ description: 'A URL to test' })
   @IsString()
   @IsNotEmpty()
@@ -23,8 +23,8 @@ export class AppController {
   @Post('awesomeness')
   @ApiSecurity('oauth2')
   @UseGuards(PassportJwtAuthGuard)
-  @ApiBody({ type: TestDto })
-  test(@Body() body: TestDto) {
+  @ApiBody({ type: AwesomenessDto })
+  test(@Body() body: AwesomenessDto) {
     return this.appService.generatePatternFromURL(body.url);
   }
 }

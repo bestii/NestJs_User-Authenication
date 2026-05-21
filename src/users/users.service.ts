@@ -6,6 +6,7 @@ import { type CreateUserDto } from './users.dto';
 @Injectable()
 export class UsersService {
   constructor(private prisma: PrismaService) {}
+
   async createUser(user: CreateUserDto) {
     const hashedPassword = await bcrypt.hash(user.password, 10);
     const data = {
@@ -19,6 +20,16 @@ export class UsersService {
       name,
       username,
     };
+  }
+
+  async findAllUsers() {
+    return await this.prisma.user.findMany({
+      select: {
+        id: true,
+        name: true,
+        username: true,
+      },
+    });
   }
 
   async findUserByUsername(username: string) {

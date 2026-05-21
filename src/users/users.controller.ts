@@ -15,6 +15,11 @@ import { UsersService } from './users.service';
 export class UsersController {
   constructor(private readonly usersService: UsersService) {}
 
+  @Get('/')
+  getUsers() {
+    return this.usersService.findAllUsers();
+  }
+
   @Post('/create')
   createUser(@Body() createUserDto: CreateUserDto) {
     return this.usersService.createUser(createUserDto);
