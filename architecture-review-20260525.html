@@ -1,0 +1,345 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Architecture review — NestJS User Authentication</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script type="module">
+    import mermaid from "https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs";
+    mermaid.initialize({ startOnLoad: true, theme: "neutral", securityLevel: "loose" });
+  </script>
+  <style>
+    .seam { stroke-dasharray: 4 4; }
+    .leak { stroke: #dc2626; stroke-width: 2px; }
+    .deep { background: linear-gradient(135deg, #0f172a, #1e293b); }
+    .badge-strong { background: #059669; color: white; }
+    .badge-worth { background: #d97706; color: white; }
+    .badge-spec  { background: #475569; color: white; }
+  </style>
+</head>
+<body class="bg-stone-50 text-slate-900 font-sans">
+<main class="max-w-5xl mx-auto px-6 py-12 space-y-12">
+
+  <header class="space-y-2">
+    <p class="text-xs uppercase tracking-widest text-stone-400">Architecture Review</p>
+    <h1 class="text-4xl font-serif font-bold">NestJS User Authentication</h1>
+    <p class="text-sm text-stone-500">2026-05-25 &mdash; 6 candidates</p>
+    <div class="flex gap-6 text-xs text-stone-400 pt-2">
+      <span><span class="border-2 border-slate-700 inline-block w-4 h-3 align-[-2px] mr-1"></span> module</span>
+      <span><span class="inline-block w-4 border-t-2 border-dashed border-slate-400 align-[-4px] mr-1"></span> seam</span>
+      <span><span class="inline-block w-4 border-t-2 border-red-600 align-[-4px] mr-1"></span> leakage</span>
+      <span><span class="inline-block w-4 h-3 align-[-2px] mr-1 bg-slate-800"></span> deep module</span>
+    </div>
+  </header>
+
+  <section id="candidates" class="space-y-10">
+
+    <!-- Candidate 1 -->
+    <article class="rounded-xl border border-slate-200 bg-white p-6 space-y-4">
+      <div class="flex items-start justify-between">
+        <div>
+          <h2 class="text-xl font-serif font-bold">Collapse config namespace indirection</h2>
+          <p class="text-xs text-stone-400 mt-1">Dependency category: in-process</p>
+        </div>
+        <span class="text-xs px-2 py-0.5 rounded-full badge-strong">Strong</span>
+      </div>
+      <div class="font-mono text-sm text-stone-500">
+        src/config/auth.config.ts &bull; src/auth/auth.module.ts &bull; src/auth/strategies/jwt.strategy.ts
+      </div>
+
+      <div class="grid grid-cols-2 gap-4">
+        <div class="rounded-lg border border-slate-200 bg-white p-4">
+          <p class="text-xs uppercase tracking-wider text-stone-400 mb-2">Before</p>
+          <pre class="mermaid text-xs">
+flowchart TD
+    Z["Zod envSchema (flat)"] -->|"JWT_SECRET"| C["ConfigService"]
+    AC["auth.config.ts\nregisterAs('auth',...)"]
+    C -->|"get('JWT_SECRET') — flat key"| JS["JwtStrategy"]
+    C -->|"get('JWT_SECRET') — flat key"| AM["AuthModule"]
+    classDef unused fill:#fef3c7,stroke:#d97706,stroke-dasharray:4 4
+    class AC unused
+          </pre>
+        </div>
+        <div class="rounded-lg border border-slate-200 bg-white p-4">
+          <p class="text-xs uppercase tracking-wider text-stone-400 mb-2">After</p>
+          <pre class="mermaid text-xs">
+flowchart TD
+    Z["Zod envSchema"] -->|"JWT_SECRET"| C["ConfigService"]
+    C -->|"get('JWT_SECRET')"| JS["JwtStrategy"]
+    C -->|"get('JWT_SECRET')"| AM["AuthModule"]
+    style Z fill:#0f172a,stroke:#0f172a,color:#e2e8f0
+          </pre>
+        </div>
+      </div>
+
+      <p class="text-sm"><strong>Problem:</strong> <code>auth.config.ts</code> registers a namespaced config block nobody reads — consumers bypass the namespace and hit Zod-validated flat keys directly. The registerAs wrapper is a shallow module whose interface is never used.</p>
+      <p class="text-sm"><strong>Solution:</strong> Delete <code>auth.config.ts</code> (and the unused <code>app.config.ts</code>, <code>database.config.ts</code> wrappers). The Zod <code>envSchema</code> is already the single source of truth. Keep JWT config reads as flat <code>configService.get('JWT_SECRET')</code>.</p>
+      <ul class="text-sm space-y-1 list-disc list-inside text-stone-600">
+        <li>locality: env shape lives in one file — <code>validate-env.ts</code></li>
+        <li>deletion test: deleting <code>auth.config.ts</code> concentrates config truth, doesn't spread it</li>
+        <li>interface shrinks: one validation schema, not two parallel sources</li>
+      </ul>
+    </article>
+
+    <!-- Candidate 2 -->
+    <article class="rounded-xl border border-slate-200 bg-white p-6 space-y-4">
+      <div class="flex items-start justify-between">
+        <div>
+          <h2 class="text-xl font-serif font-bold">Separate credential projection from user retrieval</h2>
+          <p class="text-xs text-stone-400 mt-1">Dependency category: in-process</p>
+        </div>
+        <span class="text-xs px-2 py-0.5 rounded-full badge-strong">Strong</span>
+      </div>
+      <div class="font-mono text-sm text-stone-500">
+        src/users/users.service.ts &bull; src/auth/auth.service.ts &bull; src/users/dto/create-user.dto.ts
+      </div>
+
+      <div class="grid grid-cols-2 gap-4">
+        <div class="rounded-lg border border-slate-200 bg-white p-4">
+          <p class="text-xs uppercase tracking-wider text-stone-400 mb-2">Before</p>
+          <pre class="mermaid text-xs">
+flowchart LR
+    A["AuthService\nvalidateUser()"] --> B["UsersService\nfindUserByUsername()"]
+    B -->|"returns User {id,name,username,password}"| A
+    style B fill:#fef2f2,stroke:#dc2626
+          </pre>
+          <p class="text-xs text-red-500 mt-1">Leak: password hash crosses the module seam</p>
+        </div>
+        <div class="rounded-lg border border-slate-200 bg-white p-4">
+          <p class="text-xs uppercase tracking-wider text-stone-400 mb-2">After</p>
+          <pre class="mermaid text-xs">
+flowchart LR
+    A["AuthService"] -->|"findUserByUsername()"| B["UsersService"]
+    B -->|"UserProfile {id,name,username}"| C["Callers"]
+    B -->|"UserCredential {id,password}"| A
+    style B fill:#0f172a,stroke:#0f172a,color:#e2e8f0
+          </pre>
+        </div>
+      </div>
+
+      <p class="text-sm"><strong>Problem:</strong> <code>findUserByUsername()</code> returns the password hash to every caller. The users module interface leaks authentication internals — any new consumer of user retrieval must understand they're holding a secret. No seam between profile data and credential data.</p>
+      <p class="text-sm"><strong>Solution:</strong> Split into two retrieval methods: <code>findUserProfileByUsername()</code> returns <code>{id, name, username}</code>, and a new private-ish <code>findUserCredentialByUsername()</code> returns <code>{id, password}</code> for the auth module only. Or push credential comparison entirely into the users module behind a <code>verifyCredentials(username, password): boolean</code> interface.</p>
+      <ul class="text-sm space-y-1 list-disc list-inside text-stone-600">
+        <li>leverage: callers get profile data without touching secrets</li>
+        <li>locality: credential comparison logic concentrates in one module</li>
+        <li>interface deepens: callers learn less, get the same behaviour</li>
+      </ul>
+    </article>
+
+    <!-- Candidate 3 -->
+    <article class="rounded-xl border border-slate-200 bg-white p-6 space-y-4">
+      <div class="flex items-start justify-between">
+        <div>
+          <h2 class="text-xl font-serif font-bold">Extract Google Docs parser from AppService</h2>
+          <p class="text-xs text-stone-400 mt-1">Dependency category: in-process</p>
+        </div>
+        <span class="text-xs px-2 py-0.5 rounded-full badge-worth">Worth exploring</span>
+      </div>
+      <div class="font-mono text-sm text-stone-500">
+        src/app.controller.ts &bull; src/app.service.ts &bull; src/common/
+      </div>
+
+      <div class="grid grid-cols-2 gap-4">
+        <div class="rounded-lg border border-slate-200 bg-white p-4">
+          <p class="text-xs uppercase tracking-wider text-stone-400 mb-2">Before</p>
+          <div class="relative h-36">
+            <svg class="w-full h-full" viewBox="0 0 320 120">
+              <rect x="10" y="10" width="300" height="100" rx="8" fill="none" stroke="#cbd5e1" stroke-width="1.5"/>
+              <text x="20" y="30" class="text-[8px] fill-stone-400" font-family="monospace">AppService</text>
+              <rect x="20" y="38" width="280" height="18" rx="3" fill="#f8fafc" stroke="#e2e8f0"/>
+              <text x="28" y="51" class="text-[7px] fill-stone-500" font-family="monospace">getHello()</text>
+              <rect x="20" y="60" width="280" height="42" rx="3" fill="#fef2f2" stroke="#dc2626"/>
+              <text x="28" y="73" class="text-[7px] fill-red-500" font-family="monospace">generatePatternFromURL()</text>
+              <text x="28" y="87" class="text-[6px] fill-red-400" font-family="monospace">→ fetch, parse HTML tables, reconstruct ASCII</text>
+              <line x1="20" y1="56" x2="300" y2="56" stroke="#dc2626" stroke-width="1" stroke-dasharray="2 2"/>
+            </svg>
+          </div>
+        </div>
+        <div class="rounded-lg border border-slate-200 bg-white p-4">
+          <p class="text-xs uppercase tracking-wider text-stone-400 mb-2">After</p>
+          <div class="relative h-36">
+            <svg class="w-full h-full" viewBox="0 0 320 120">
+              <rect x="10" y="10" width="130" height="50" rx="8" fill="#0f172a" stroke="#1e293b" stroke-width="1.5"/>
+              <text x="20" y="30" class="text-[8px] fill-slate-300" font-family="monospace">AppModule</text>
+              <text x="20" y="48" class="text-[7px] fill-slate-400" font-family="monospace">getHello()</text>
+              <rect x="170" y="10" width="140" height="80" rx="8" fill="none" stroke="#cbd5e1" stroke-width="1.5"/>
+              <text x="180" y="30" class="text-[8px] fill-stone-400" font-family="monospace">PatternParser</text>
+              <text x="180" y="48" class="text-[7px] fill-stone-500" font-family="monospace">parseFromURL(url)</text>
+              <text x="180" y="62" class="text-[7px] fill-stone-500" font-family="monospace">parseFromHTML(html)</text>
+              <text x="180" y="78" class="text-[7px] fill-stone-400" font-family="monospace">→ stands alone, testable</text>
+            </svg>
+          </div>
+        </div>
+      </div>
+
+      <p class="text-sm"><strong>Problem:</strong> <code>generatePatternFromURL()</code> is a 50-line HTML-table parser living in the root <code>AppService</code>. It has nothing to do with the application's purpose. It's guarded by JWT as an apparent test endpoint, but its implementation has no seam — can't test parsing logic without hitting the network.</p>
+      <p class="text-sm"><strong>Solution:</strong> Extract to <code>src/common/parsers/pattern-parser.ts</code> with a pure <code>parseFromHTML(html: string)</code> interface. The controller handles the URL fetch, the parser handles the extraction. <code>parseFromHTML</code> is testable with inline HTML strings; no mocks needed.</p>
+      <ul class="text-sm space-y-1 list-disc list-inside text-stone-600">
+        <li>leverage: one parser, pure interface — testable with static HTML</li>
+        <li>locality: pattern logic lives in one module, not mixed with app concerns</li>
+        <li>deletion test: deleting the parser doesn't touch auth, users, or health</li>
+      </ul>
+    </article>
+
+    <!-- Candidate 4 -->
+    <article class="rounded-xl border border-slate-200 bg-white p-6 space-y-4">
+      <div class="flex items-start justify-between">
+        <div>
+          <h2 class="text-xl font-serif font-bold">Remove dead providers and unused methods</h2>
+          <p class="text-xs text-stone-400 mt-1">Dependency category: in-process</p>
+        </div>
+        <span class="text-xs px-2 py-0.5 rounded-full badge-strong">Strong</span>
+      </div>
+      <div class="font-mono text-sm text-stone-500">
+        src/auth/auth.service.ts &bull; src/health/health.service.ts &bull; src/health/health.module.ts
+      </div>
+
+      <div class="grid grid-cols-2 gap-4">
+        <div class="rounded-lg border border-slate-200 bg-white p-4">
+          <p class="text-xs uppercase tracking-wider text-stone-400 mb-2">Before</p>
+          <pre class="mermaid text-xs">
+flowchart LR
+    AS["AuthService"] --> VU["validateUser() ✓"]
+    AS --> AU["authenticateUser() ✗ never called"]
+    HS["HealthService"] --> GH["getHealth() ✗ never called"]
+    style AU fill:#fef3c7,stroke:#d97706,stroke-dasharray:4 4
+    style HS fill:#fef3c7,stroke:#d97706,stroke-dasharray:4 4
+    style GH fill:#fef3c7,stroke:#d97706,stroke-dasharray:4 4
+          </pre>
+          <p class="text-xs text-amber-600 mt-1">Deletion test: complexity vanishes</p>
+        </div>
+        <div class="rounded-lg border border-slate-200 bg-white p-4">
+          <p class="text-xs uppercase tracking-wider text-stone-400 mb-2">After</p>
+          <pre class="mermaid text-xs">
+flowchart LR
+    AS["AuthService"] --> VU["validateUser()"]
+    style AS fill:#0f172a,stroke:#0f172a,color:#e2e8f0
+          </pre>
+          <p class="text-xs text-emerald-600 mt-1">One module, one voice</p>
+        </div>
+      </div>
+
+      <p class="text-sm"><strong>Problem:</strong> <code>AuthService.authenticateUser()</code> is a wrapper around <code>validateUser()</code> that throws on failure — but the guard+strategy already handles the failure path. <code>HealthService.getHealth()</code> is injected into <code>HealthModule</code> but the controller uses <code>@nestjs/terminus</code> directly. Both pass the deletion test: deleting them concentrates no complexity elsewhere.</p>
+      <p class="text-sm"><strong>Solution:</strong> Delete <code>authenticateUser()</code>, delete <code>HealthService</code>, remove <code>HealthService</code> from the module's <code>providers</code> array.</p>
+      <ul class="text-sm space-y-1 list-disc list-inside text-stone-600">
+        <li>leverage: no change — dead code has zero leverage</li>
+        <li>locality: fewer modules to read, less noise in autocomplete</li>
+        <li>interface clarity: what remains is what's actually used</li>
+      </ul>
+    </article>
+
+    <!-- Candidate 5 -->
+    <article class="rounded-xl border border-slate-200 bg-white p-6 space-y-4">
+      <div class="flex items-start justify-between">
+        <div>
+          <h2 class="text-xl font-serif font-bold">Decouple DTOs from Prisma generated types</h2>
+          <p class="text-xs text-stone-400 mt-1">Dependency category: in-process</p>
+        </div>
+        <span class="text-xs px-2 py-0.5 rounded-full badge-worth">Worth exploring</span>
+      </div>
+      <div class="font-mono text-sm text-stone-500">
+        src/users/dto/create-user.dto.ts &bull; src/generated/prisma/
+      </div>
+
+      <div class="grid grid-cols-2 gap-4">
+        <div class="rounded-lg border border-slate-200 bg-white p-4">
+          <p class="text-xs uppercase tracking-wider text-stone-400 mb-2">Before</p>
+          <pre class="mermaid text-xs">
+flowchart TD
+    CD["CreateUserDto"] -.->|implements| PI["Prisma.UserCreateInput"]
+    CD --> US["UsersService.createUser()"]
+    PI --> PR["PrismaClient"]
+    style PI fill:#fef2f2,stroke:#dc2626
+          </pre>
+          <p class="text-xs text-red-500 mt-1">DTO structurally coupled to ORM types</p>
+        </div>
+        <div class="rounded-lg border border-slate-200 bg-white p-4">
+          <p class="text-xs uppercase tracking-wider text-stone-400 mb-2">After</p>
+          <pre class="mermaid text-xs">
+flowchart TD
+    CD["CreateUserDto\n{name, username, password}"] --> US["UsersService.createUser()"]
+    US --> PR["PrismaClient"]
+    style CD fill:#0f172a,stroke:#0f172a,color:#e2e8f0
+          </pre>
+          <p class="text-xs text-emerald-600 mt-1">Standalone DTO; service maps to Prisma shape</p>
+        </div>
+      </div>
+
+      <p class="text-sm"><strong>Problem:</strong> <code>CreateUserDto implements Prisma.UserCreateInput</code> ties the HTTP contract to Prisma's generated types. A Prisma schema change (rename a field, add a relation) ripples into the API surface. The DTO carries concerns from two seams: HTTP validation and ORM shape.</p>
+      <p class="text-sm"><strong>Solution:</strong> Drop the <code>implements Prisma.UserCreateInput</code>. Define <code>CreateUserDto</code> as a standalone class. The <code>UsersService.createUser()</code> maps the DTO fields explicitly to the Prisma shape. This is a few lines of mapping for a stronger seam.</p>
+      <ul class="text-sm space-y-1 list-disc list-inside text-stone-600">
+        <li>leverage: API surface doesn't change when the ORM schema changes</li>
+        <li>locality: Prisma shape knowledge stays inside the service</li>
+        <li>one adapter at each seam: DTO speaks HTTP, Prisma speaks database</li>
+      </ul>
+    </article>
+
+    <!-- Candidate 6 -->
+    <article class="rounded-xl border border-slate-200 bg-white p-6 space-y-4">
+      <div class="flex items-start justify-between">
+        <div>
+          <h2 class="text-xl font-serif font-bold">Add test seams to the auth pipeline</h2>
+          <p class="text-xs text-stone-400 mt-1">Dependency category: local-substitutable</p>
+        </div>
+        <span class="text-xs px-2 py-0.5 rounded-full badge-strong">Strong</span>
+      </div>
+      <div class="font-mono text-sm text-stone-500">
+        src/auth/auth.service.ts &bull; src/auth/strategies/*.ts &bull; test/
+      </div>
+
+      <div class="grid grid-cols-2 gap-4">
+        <div class="rounded-lg border border-slate-200 bg-white p-4">
+          <p class="text-xs uppercase tracking-wider text-stone-400 mb-2">Before</p>
+          <pre class="mermaid text-xs">
+flowchart TD
+    subgraph No test seam
+        C["AuthController"] --> G["PassportLocalGuard"]
+        G --> S["LocalStrategy"]
+        S --> AS["AuthService"]
+        AS --> US["UsersService"]
+        US --> DB["PrismaService"]
+    end
+    style No test seam fill:#fef2f2,stroke:#dc2626
+          </pre>
+          <p class="text-xs text-red-500 mt-1">6-module chain, no seam to substitute a fake anywhere</p>
+        </div>
+        <div class="rounded-lg border border-slate-200 bg-white p-4">
+          <p class="text-xs uppercase tracking-wider text-stone-400 mb-2">After</p>
+          <pre class="mermaid text-xs">
+flowchart TD
+    C["AuthController"] --> AS["AuthService (interface)\nvalidateUser / signIn"]
+    AS --> US["UsersService"]
+    AS --> JW["JwtService"]
+    style AS fill:#0f172a,stroke:#0f172a,color:#e2e8f0
+          </pre>
+          <p class="text-xs text-emerald-600 mt-1">Test AuthService in isolation with fake UsersService</p>
+        </div>
+      </div>
+
+      <p class="text-sm"><strong>Problem:</strong> Zero test files exist despite Jest infrastructure being scaffolded. The highest-value target — <code>AuthService</code> — depends on <code>UsersService</code> (which hits <code>PrismaService</code>) and <code>JwtService</code>. Every test would need a full NestJS module setup with real or deep-mocked dependencies. No in-process seam exists for substituting a fake <code>UsersService</code>.</p>
+      <p class="text-sm"><strong>Solution:</strong> Inject <code>UsersService</code> via its interface so tests supply a fake. Same for <code>JwtService</code>. Write <code>AuthService</code> unit tests against a fake that returns predetermined users. The fakes are one adapter; the real implementations are another — a real seam emerges.</p>
+      <ul class="text-sm space-y-1 list-disc list-inside text-stone-600">
+        <li>leverage: one test suite exercises the full auth decision tree</li>
+        <li>locality: auth logic errors caught at the auth module boundary</li>
+        <li>two adapters justify the seam: real Prisma-backed + in-memory fake</li>
+      </ul>
+    </article>
+
+  </section>
+
+  <!-- Top Recommendation -->
+  <section id="top-recommendation" class="rounded-xl border-2 border-emerald-200 bg-emerald-50/30 p-6 space-y-3">
+    <p class="text-xs uppercase tracking-widest text-emerald-600">Top recommendation</p>
+    <h2 class="text-xl font-serif font-bold text-emerald-900">Add test seams to the auth pipeline</h2>
+    <p class="text-sm text-emerald-800">
+      Tackle this first because it has the highest leverage: tests are the gating factor for every other refactor.
+      Without a test seam, deepening any module is guesswork. <code>AuthService</code> is the narrowest interface
+      with the richest behaviour — the perfect place to start. Once tested, the rest of the candidates become safe
+      to collapse, extract, and delete.
+    </p>
+    <a href="#candidates" class="text-xs text-emerald-600 underline">scroll to card ↑</a>
+  </section>
+
+</main>
+</body>
+</html>
