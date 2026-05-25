@@ -7,6 +7,7 @@ import { validateEnv } from './config/validate-env';
 import { HealthModule } from './health/health.module';
 import { PrismaModule } from './prisma/prisma.module';
 import { UsersModule } from './users/users.module';
+import { AiModule } from './ai/ai.module';
 
 @Module({
   imports: [
@@ -21,6 +22,7 @@ import { UsersModule } from './users/users.module';
     AuthModule,
     HealthModule,
     PrismaModule,
+    AiModule,
   ],
   controllers: [AppController],
   providers: [AppService],
